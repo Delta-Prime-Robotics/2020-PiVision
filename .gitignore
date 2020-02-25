@@ -113,5 +113,5 @@ imgui.ini
 !ntcore.jar
 !opencv-347.jar
 !wpiHal.jar
-!wpilib.jar
+!wpilibj.jar
 !wpiutil.jar

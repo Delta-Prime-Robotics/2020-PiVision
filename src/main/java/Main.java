@@ -320,12 +320,6 @@ public final class Main {
               new MyPipeline(), pipeline -> {
         // do something with pipeline results
       });
-      /* something like this for GRIP:
-      VisionThread visionThread = new VisionThread(cameras.get(0),
-              new GripPipeline(), pipeline -> {
-        ...
-      });
-       */
       visionThread.start();
     }
 
@@ -339,18 +333,22 @@ public final class Main {
     }
   }
 
-     /**
-   * Example pipeline.
-   */
+  /**
+    * ***********************************************************************
+    * 
+    * Vision Pipeline for Infinite Recharge (2020)
+    * 
+    * ***********************************************************************
+  */
   public static class MyPipeline implements VisionPipeline {
     //Processing Constants
     private static class VisionConstants {
       private static final double ImageWidth = 320.0;
       private static final double ImageHeight = 240.0;
   
-      private static final double[] HsvThresholdHue = {66.0, 100.0};
-      private static final double[] HsvThresholdSaturation = {66.0, 240.0};
-      private static final double[] HsvThresholdValue = {123.0, 255.0};
+      private static final double[] HsvThresholdHue = {58.0, 129.0};
+      private static final double[] HsvThresholdSaturation = {80.0, 240.0};
+      private static final double[] HsvThresholdValue = {98.0, 255.0};
   
       private static final double FilterContoursMinArea = 20.0;
       private static final double FilterContoursMinPerimeter = 20.0;
@@ -359,6 +357,11 @@ public final class Main {
       private static final double[] FilterContoursSolidity = {0, 60.0};
       private static final double FilterContoursMinVertices = 0.0;
       private static final double FilterContoursMinRatio = 0.0;
+
+      private static final double HoriFOV = Math.toRadians(50.0); // Horizontal Field of View
+      private static final double VertFOV = Math.toRadians(40.0); // Vertical Field of View in degrees
+      private static final double ViewPlaneHeight = 2.0 * Math.tan(VertFOV / 2.0);
+      private static final double ViewPlaneWidth = 2.0 * Math.tan(HoriFOV / 2.0);
     }
     
     //Outputs
@@ -374,6 +377,9 @@ public final class Main {
       public static NetworkTableEntry centerY;
       public static NetworkTableEntry offsetX;
       public static NetworkTableEntry offsetY;
+      // Limelight-compatible settings
+      public static NetworkTableEntry angleX;
+      public static NetworkTableEntry angleY;
     }
     
     static {
@@ -388,17 +394,23 @@ public final class Main {
         }
 
         if (m_ntTable != null) {
-          NTE.targetCount = m_ntTable.getEntry("targetCount");
-          NTE.centerX = m_ntTable.getEntry("centerX");
-          NTE.centerY = m_ntTable.getEntry("centerY");
-          NTE.offsetX = m_ntTable.getEntry("offsetX");
-          NTE.offsetY = m_ntTable.getEntry("offsetY");
+          NTE.targetCount = m_ntTable.getEntry("ct");
+          NTE.centerX = m_ntTable.getEntry("cx");
+          NTE.centerY = m_ntTable.getEntry("cy");
+          NTE.offsetX = m_ntTable.getEntry("nx");
+          NTE.offsetY = m_ntTable.getEntry("ny");
+          // Limelight-compatible settings
+          NTE.angleX = m_ntTable.getEntry("tx"); // Horizontal angle to the target in radians
+          NTE.angleY = m_ntTable.getEntry("ty"); // Vertical angle to the target in radians
+
 
           NTE.targetCount.setDefaultNumber(0);
           NTE.centerX.setDefaultDouble(0.0);
           NTE.centerY.setDefaultDouble(0.0);
           NTE.offsetX.setDefaultDouble(0.0);
           NTE.offsetY.setDefaultDouble(0.0);
+          NTE.angleX.setDefaultDouble(0.0);
+          NTE.angleY.setDefaultDouble(0.0);
         }
     }
 
@@ -587,14 +599,42 @@ public final class Main {
 
     /**
      * Find the offset between the center of the image and a point
-     * @param point the point that is offset from the center
-     * @return The difference in x & y from the center of the image to the specified point
+     * Normalize the coordinates so (0,0) is the center and the upper right corner is (1,1) 
+     * @param point the point to translate 
+     * @return The normalized coordinates to the specified point
      */
     public Point findOffset(Point point) {
-      double offsetX = point.x - (VisionConstants.ImageWidth / 2);
-      double offsetY = point.y - (VisionConstants.ImageHeight / 2);
+      double halfWidth = (VisionConstants.ImageWidth / 2);
+      double halfHeight = (VisionConstants.ImageHeight / 2);
+
+      double offsetX = (point.x - (halfWidth - 0.5)) / halfWidth;
+      double offsetY = ((halfHeight - 0.5) - point.y) / halfHeight;
 
       return new Point(offsetX, offsetY);
+    }
+
+    /**
+     * Convert a normalized X coordinate into an angle from the center
+     * @param xCoord the normalized X coordinate--i.e. image center at (0,0), positive right
+     * @return the angle from the center to the given X coordinate
+     */
+    public double findAngleX(double xCoord) {
+      double planeX = xCoord * VisionConstants.ViewPlaneWidth / 2.0;
+      double angleX = Math.atan2(planeX, 1);
+      
+      return angleX;
+    }
+
+    /**
+     * Convert a normalized Y coordinate into an angle from the center
+     * @param yCoord the normalized Y coordinate--i.e. image center at (0,0), positive up
+     * @return the angle from the center to the given Y coordinate
+     */
+    public double findAngleY(double yCoord) {
+      double planeY = yCoord * VisionConstants.ViewPlaneHeight / 2.0;
+      double angleY = Math.atan2(planeY, 1);
+
+      return angleY;
     }
 
     /**
@@ -606,12 +646,17 @@ public final class Main {
 
       Point center = new Point(0,0);
       Point offset = new Point(0,0);
+      double angleX = 0.0;
+      double angleY = 0.0;
 
       if (matches == 1) {
         // Get the coordinates to the center of the contour
         center = findCenter(inputContours.get(0));
-        // Get the offset from the center of the image to the center of the contour
+        // Get the normalized offset from the center of the image to the center of the contour
         offset = findOffset(center);
+        // Get the angles from the center of the image to offset
+        angleX = findAngleX(offset.x);
+        angleY = findAngleY(offset.y);
       }
       
       NTE.targetCount.setNumber(matches);
@@ -619,6 +664,8 @@ public final class Main {
       NTE.centerY.setDouble(center.y);
       NTE.offsetX.setDouble(offset.x);
       NTE.offsetY.setDouble(offset.y);
+      NTE.angleX.setDouble(angleX);
+      NTE.angleY.setDouble(angleY);
 
     }
   }
