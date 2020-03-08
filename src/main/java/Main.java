@@ -358,10 +358,10 @@ public final class Main {
       private static final double FilterContoursMinVertices = 0.0;
       private static final double FilterContoursMinRatio = 0.0;
 
-      private static final double HoriFOV = Math.toRadians(50.0); // Horizontal Field of View
-      private static final double VertFOV = Math.toRadians(40.0); // Vertical Field of View in degrees
-      private static final double ViewPlaneHeight = 2.0 * Math.tan(VertFOV / 2.0);
-      private static final double ViewPlaneWidth = 2.0 * Math.tan(HoriFOV / 2.0);
+      private static final double HoriFOV = 50.0; // Horizontal Field of View in degrees
+      private static final double VertFOV = 40.0; // Vertical Field of View in degrees
+      private static final double ViewPlaneHeight = 2.0 * Math.tan(Math.toRadians(VertFOV) / 2.0);
+      private static final double ViewPlaneWidth = 2.0 * Math.tan(Math.toRadians(HoriFOV) / 2.0);
     }
     
     //Outputs
@@ -400,8 +400,8 @@ public final class Main {
           NTE.offsetX = m_ntTable.getEntry("nx");
           NTE.offsetY = m_ntTable.getEntry("ny");
           // Limelight-compatible settings
-          NTE.angleX = m_ntTable.getEntry("tx"); // Horizontal angle to the target in radians
-          NTE.angleY = m_ntTable.getEntry("ty"); // Vertical angle to the target in radians
+          NTE.angleX = m_ntTable.getEntry("tx"); // Horizontal angle to the target in degrees
+          NTE.angleY = m_ntTable.getEntry("ty"); // Vertical angle to the target in degrees
 
 
           NTE.targetCount.setDefaultNumber(0);
@@ -481,7 +481,7 @@ public final class Main {
      * @param output The image in which to store the output.
      */
     private void resizeImage(Mat input, double width, double height, int interpolation, Mat output) {
-      Imgproc.resize(input, output, new Size(width, height), 0.0, 0.0, interpolation);
+        Imgproc.resize(input, output, new Size(width, height), 0.0, 0.0, interpolation);
     }
 
     /**
@@ -615,24 +615,24 @@ public final class Main {
 
     /**
      * Convert a normalized X coordinate into an angle from the center
-     * @param xCoord the normalized X coordinate--i.e. image center at (0,0), positive right
+     * @param xCoord the normalized X coordinate--i.e. image center at (0,0), positive values = right
      * @return the angle from the center to the given X coordinate
      */
     public double findAngleX(double xCoord) {
       double planeX = xCoord * VisionConstants.ViewPlaneWidth / 2.0;
-      double angleX = Math.atan2(planeX, 1);
+      double angleX = Math.toDegrees(Math.atan2(planeX, 1));
       
       return angleX;
     }
 
     /**
      * Convert a normalized Y coordinate into an angle from the center
-     * @param yCoord the normalized Y coordinate--i.e. image center at (0,0), positive up
+     * @param yCoord the normalized Y coordinate--i.e. image center at (0,0), positive values = up
      * @return the angle from the center to the given Y coordinate
      */
     public double findAngleY(double yCoord) {
       double planeY = yCoord * VisionConstants.ViewPlaneHeight / 2.0;
-      double angleY = Math.atan2(planeY, 1);
+      double angleY = Math.toDegrees(Math.atan2(planeY, 1));
 
       return angleY;
     }
